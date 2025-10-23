@@ -93,6 +93,10 @@ class BattleServer implements MessageComponentInterface {
                 $this->handlePing($from);
                 break;
                 
+            case 'pong':
+                $this->handlePong($from);
+                break;
+                
             default:
                 logMessage('WARNING', "Unknown action: {$data['action']}");
         }
@@ -243,7 +247,11 @@ class BattleServer implements MessageComponentInterface {
         $userId = $conn->battleData->userId;
         $battleId = $data['battle_id'] ?? null;
         
+        logMessage('DEBUG', "handleConfirmMatch called for user {$userId}, battle_id: {$battleId}");
+        logMessage('DEBUG', "Active battles: " . json_encode(array_keys($this->activeBattles)));
+        
         if (!$battleId || !isset($this->activeBattles[$battleId])) {
+            logMessage('ERROR', "Invalid battle ID: {$battleId}, available battles: " . json_encode(array_keys($this->activeBattles)));
             $this->sendError($conn, 'Invalid battle ID');
             return;
         }
@@ -320,6 +328,11 @@ class BattleServer implements MessageComponentInterface {
     private function handlePing($conn) {
         $conn->battleData->lastPing = time();
         $this->sendMessage($conn, ['action' => 'pong']);
+    }
+    
+    private function handlePong($conn) {
+        $conn->battleData->lastPing = time();
+        logMessage('DEBUG', "Received pong from client {$conn->resourceId}");
     }
 
     private function tryMatchmaking() {
