@@ -1,0 +1,19 @@
+{
+    "name": "edutorium/websocket-server",
+    "description": "Standalone WebSocket server for Edutorium Battle System",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "cboden/ratchet": "^0.4.4",
+        "react/event-loop": "^1.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Edutorium\\WebSocket\\": "src/"
+        }
+    },
+    "scripts": {
+        "start": "php battle-server.php",
+        "test": "php -l battle-server.php"
+    }
+}

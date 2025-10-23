@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  websocket-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edutorium-websocket-server
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL:-https://ratxqmbqzwbvfgsonlrd.supabase.co}
+      - SUPABASE_KEY=${SUPABASE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhdHhxbWJxendidmZnc29ubHJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQyMDI0NDAsImV4cCI6MjA1OTc3ODQ0MH0.HJ9nQbvVvVisvQb6HMVMlmQBVmW7Ie42Z6Afdwn8W2M}
+      - WEBSOCKET_PORT=8080
+      - LOG_LEVEL=info
+    volumes:
+      - ./logs:/var/www/html/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - edutorium-network
+
+networks:
+  edutorium-network:
+    driver: bridge
