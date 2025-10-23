@@ -183,7 +183,10 @@ class BattleServer implements MessageComponentInterface {
     }
 
     private function handleFindMatch($conn, $data) {
+        logMessage('DEBUG', "handleFindMatch called for connection {$conn->resourceId}");
+        
         if (!$conn->battleData->userId) {
+            logMessage('ERROR', "Find match request from unauthenticated connection {$conn->resourceId}");
             $this->sendError($conn, 'Not authenticated');
             return;
         }
@@ -193,6 +196,8 @@ class BattleServer implements MessageComponentInterface {
         // Store matchmaking configuration
         $conn->battleData->config = $data['config'] ?? [];
         
+        logMessage('DEBUG', "User {$conn->battleData->username} config: " . json_encode($conn->battleData->config));
+        
         // Add to waiting players
         $this->waitingPlayers[$userId] = [
             'connection' => $conn,
@@ -201,6 +206,7 @@ class BattleServer implements MessageComponentInterface {
         ];
         
         logMessage('INFO', "User {$conn->battleData->username} started matchmaking");
+        logMessage('DEBUG', "Current waiting players count: " . count($this->waitingPlayers));
         
         $this->sendMessage($conn, [
             'action' => 'matchmaking_started',
@@ -676,7 +682,9 @@ try {
         foreach ($battleServer->getClients() as $client) {
             // Send ping to client
             try {
+                logMessage('DEBUG', "Sending ping to client {$client->resourceId}");
                 $client->send(json_encode(['action' => 'ping']));
+                logMessage('DEBUG', "Ping sent successfully to client {$client->resourceId}");
             } catch (Exception $e) {
                 logMessage('ERROR', "Failed to send ping to client {$client->resourceId}: " . $e->getMessage());
             }
