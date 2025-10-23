@@ -99,20 +99,25 @@ class BattleServer implements MessageComponentInterface {
     }
 
     public function onClose(ConnectionInterface $conn) {
+        logMessage('INFO', "Connection closing for resource {$conn->resourceId}");
+        
         $this->clients->detach($conn);
         
         if ($conn->battleData->userId) {
             $userId = $conn->battleData->userId;
+            logMessage('INFO', "Cleaning up user data for user: {$userId}");
             unset($this->users[$userId]);
             unset($this->userDetails[$userId]);
             
             // Remove from waiting players
             if (isset($this->waitingPlayers[$userId])) {
                 unset($this->waitingPlayers[$userId]);
+                logMessage('INFO', "Removed user {$userId} from waiting players");
             }
             
             // Handle battle disconnection
             if ($conn->battleData->inBattle && $conn->battleData->battleId) {
+                logMessage('INFO', "Handling battle disconnection for user {$userId}");
                 $this->handleBattleDisconnection($conn);
             }
         }
@@ -121,7 +126,8 @@ class BattleServer implements MessageComponentInterface {
     }
 
     public function onError(ConnectionInterface $conn, \Exception $e) {
-        logMessage('ERROR', "WebSocket error: {$e->getMessage()}");
+        logMessage('ERROR', "WebSocket error for connection {$conn->resourceId}: {$e->getMessage()}");
+        logMessage('ERROR', "Stack trace: " . $e->getTraceAsString());
         $conn->close();
     }
 
@@ -136,7 +142,11 @@ class BattleServer implements MessageComponentInterface {
         // Verify token with Supabase
         $response = supabaseRequest('/auth/v1/user', 'GET', null, $token);
         
+        logMessage('DEBUG', "Supabase response status: " . $response['status']);
+        logMessage('DEBUG', "Supabase response data: " . json_encode($response['data']));
+        
         if ($response['status'] !== 200) {
+            logMessage('ERROR', "Token verification failed with status: " . $response['status']);
             $this->sendError($conn, 'Invalid authentication token');
             return;
         }
@@ -158,14 +168,18 @@ class BattleServer implements MessageComponentInterface {
         
         logMessage('INFO', "User logged in: {$conn->battleData->username} ({$userId})");
         
-        $this->sendMessage($conn, [
+        $loginResponse = [
             'action' => 'login_success',
             'user' => [
                 'id' => $userId,
                 'username' => $conn->battleData->username,
                 'avatar' => $conn->battleData->avatar
             ]
-        ]);
+        ];
+        
+        logMessage('DEBUG', "Sending login success message: " . json_encode($loginResponse));
+        $this->sendMessage($conn, $loginResponse);
+        logMessage('DEBUG', "Login success message sent successfully");
     }
 
     private function handleFindMatch($conn, $data) {
@@ -573,7 +587,14 @@ class BattleServer implements MessageComponentInterface {
 
 
     private function sendMessage($conn, $data) {
-        $conn->send(json_encode($data));
+        try {
+            $jsonData = json_encode($data);
+            logMessage('DEBUG', "Sending message to connection {$conn->resourceId}: " . $jsonData);
+            $conn->send($jsonData);
+            logMessage('DEBUG', "Message sent successfully to connection {$conn->resourceId}");
+        } catch (Exception $e) {
+            logMessage('ERROR', "Failed to send message to connection {$conn->resourceId}: " . $e->getMessage());
+        }
     }
 
     private function sendError($conn, $message) {
