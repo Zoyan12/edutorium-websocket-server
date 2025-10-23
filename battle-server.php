@@ -615,6 +615,37 @@ try {
 
 logMessage('INFO', 'Battle WebSocket Server is running on port ' . WEBSOCKET_PORT . '. Press Ctrl+C to stop.');
 
+// Start a simple HTTP server for health checks on port 8080
+$httpServer = new \React\Http\HttpServer(function (\Psr\Http\Message\ServerRequestInterface $request) use ($battleServer) {
+    $path = $request->getUri()->getPath();
+    
+    if ($path === '/health') {
+        return new \React\Http\Message\Response(
+            200,
+            ['Content-Type' => 'application/json'],
+            json_encode([
+                'status' => 'healthy',
+                'timestamp' => time(),
+                'connections' => $battleServer->getClientCount()
+            ])
+        );
+    }
+    
+    return new \React\Http\Message\Response(
+        200,
+        ['Content-Type' => 'application/json'],
+        json_encode([
+            'message' => 'Edutorium WebSocket Server',
+            'status' => 'running',
+            'websocket_url' => 'wss://edutorium-api.pegioncloud.com'
+        ])
+    );
+});
+
+$httpSocket = new \React\Socket\SocketServer('0.0.0.0:8080');
+$httpServer->listen($httpSocket);
+logMessage('INFO', 'HTTP health check server started on port 8080');
+
 // Set up heartbeat after server is created
 try {
     $loop = \React\EventLoop\Loop::get();

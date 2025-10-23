@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     curl \
+    wget \
     libcurl4-openssl-dev \
     pkg-config \
     libssl-dev \
@@ -34,6 +35,10 @@ COPY --from=composer-stage /app/vendor ./vendor
 
 # Copy application files
 COPY . .
+
+# Copy and setup health check script
+COPY healthcheck.sh /usr/local/bin/healthcheck.sh
+RUN chmod +x /usr/local/bin/healthcheck.sh
 
 # Create logs directory
 RUN mkdir -p logs && chmod 755 logs
@@ -58,12 +63,12 @@ exec php battle-server.php' > /usr/local/bin/start-websocket.sh
 
 RUN chmod +x /usr/local/bin/start-websocket.sh
 
-# Expose WebSocket port
-EXPOSE 3000
+# Expose WebSocket port and HTTP health check port
+EXPOSE 3000 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+# Health check using custom script
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh
 
 # Start WebSocket server
 CMD ["/usr/local/bin/start-websocket.sh"]
