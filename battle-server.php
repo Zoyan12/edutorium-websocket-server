@@ -674,6 +674,14 @@ try {
         $currentTime = time();
         
         foreach ($battleServer->getClients() as $client) {
+            // Send ping to client
+            try {
+                $client->send(json_encode(['action' => 'ping']));
+            } catch (Exception $e) {
+                logMessage('ERROR', "Failed to send ping to client {$client->resourceId}: " . $e->getMessage());
+            }
+            
+            // Check if client has responded recently
             if ($client->battleData->lastPing < $currentTime - 30) {
                 logMessage('WARNING', "Client {$client->resourceId} timed out");
                 $client->close();
