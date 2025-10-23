@@ -45,7 +45,6 @@ RUN chown -R www-data:www-data /var/www/html \
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
-set -e\n\
 \n\
 echo "Starting Edutorium WebSocket Server..."\n\
 echo "Environment: ${APP_ENV:-production}"\n\

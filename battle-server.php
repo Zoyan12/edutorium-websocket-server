@@ -38,9 +38,6 @@ class BattleServer implements MessageComponentInterface {
     public function __construct() {
         $this->clients = new \SplObjectStorage;
         logMessage('INFO', 'Battle Server started!');
-        
-        // Set up a heartbeat to check for disconnected players
-        $this->setupHeartbeat();
     }
 
     public function onOpen(ConnectionInterface $conn) {
@@ -574,23 +571,6 @@ class BattleServer implements MessageComponentInterface {
         }
     }
 
-    private function setupHeartbeat() {
-        // Set up a timer to check for disconnected players every 10 seconds
-        $loop = \React\EventLoop\Loop::get();
-        
-        $loop->addPeriodicTimer(10, function() {
-            $currentTime = time();
-            
-            foreach ($this->clients as $client) {
-                if ($client->battleData->lastPing < $currentTime - 30) {
-                    logMessage('WARNING', "Client {$client->resourceId} timed out");
-                    $client->close();
-                }
-            }
-        });
-        
-        logMessage('INFO', 'Heartbeat timer set up successfully');
-    }
 
     private function sendMessage($conn, $data) {
         $conn->send(json_encode($data));
@@ -602,61 +582,56 @@ class BattleServer implements MessageComponentInterface {
             'message' => $message
         ]);
     }
+    
+    public function getClientCount() {
+        return count($this->clients);
+    }
+    
+    public function getClients() {
+        return $this->clients;
+    }
 }
 
 // Create and start the server
 logMessage('INFO', 'Starting Battle WebSocket Server on port ' . WEBSOCKET_PORT . '...');
 
-$server = IoServer::factory(
-    new HttpServer(
-        new WsServer(
-            new BattleServer()
-        )
-    ),
-    WEBSOCKET_PORT,
-    WEBSOCKET_HOST
-);
+// Create BattleServer instance
+$battleServer = new BattleServer();
 
-// Configure server for proxy/HTTPS
-$server->on('request', function($request, $response) {
-    // Handle CORS for WebSocket connections
-    $response->writeHead(200, [
-        'Content-Type' => 'application/json',
-        'Access-Control-Allow-Origin' => '*',
-        'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers' => 'Content-Type, Authorization',
-        'Access-Control-Max-Age' => '86400'
-    ]);
-    
-    if ($request->getMethod() === 'OPTIONS') {
-        $response->end();
-        return;
-    }
-    
-    // Handle health check
-    if ($request->getUri()->getPath() === '/health') {
-        $response->end(json_encode([
-            'status' => 'healthy',
-            'timestamp' => time(),
-            'connections' => count($server->app->clients ?? [])
-        ]));
-        return;
-    }
-    
-    // Handle WebSocket upgrade requests
-    if ($request->getHeaderLine('Upgrade') === 'websocket') {
-        // Let the WebSocket server handle this
-        return;
-    }
-    
-    // Default response for other requests
-    $response->end(json_encode([
-        'message' => 'Edutorium WebSocket Server',
-        'status' => 'running',
-        'websocket_url' => 'wss://edutorium-api.pegioncloud.com'
-    ]));
-});
+// Create the IoServer
+try {
+    $server = IoServer::factory(
+        new HttpServer(
+            new WsServer($battleServer)
+        ),
+        WEBSOCKET_PORT,
+        WEBSOCKET_HOST
+    );
+    logMessage('INFO', 'Server created successfully');
+} catch (Exception $e) {
+    logMessage('ERROR', 'Failed to create server: ' . $e->getMessage());
+    exit(1);
+}
 
 logMessage('INFO', 'Battle WebSocket Server is running on port ' . WEBSOCKET_PORT . '. Press Ctrl+C to stop.');
+
+// Set up heartbeat after server is created
+try {
+    $loop = \React\EventLoop\Loop::get();
+    $loop->addPeriodicTimer(10, function() use ($battleServer) {
+        $currentTime = time();
+        
+        foreach ($battleServer->getClients() as $client) {
+            if ($client->battleData->lastPing < $currentTime - 30) {
+                logMessage('WARNING', "Client {$client->resourceId} timed out");
+                $client->close();
+            }
+        }
+    });
+    
+    logMessage('INFO', 'Heartbeat timer set up successfully');
+} catch (Exception $e) {
+    logMessage('WARNING', 'Failed to set up heartbeat: ' . $e->getMessage());
+}
 
 $server->run();
