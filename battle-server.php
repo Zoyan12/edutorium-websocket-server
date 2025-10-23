@@ -617,18 +617,46 @@ $server = IoServer::factory(
     WEBSOCKET_HOST
 );
 
-logMessage('INFO', 'Battle WebSocket Server is running on port ' . WEBSOCKET_PORT . '. Press Ctrl+C to stop.');
-
-// Add health check endpoint
+// Configure server for proxy/HTTPS
 $server->on('request', function($request, $response) {
+    // Handle CORS for WebSocket connections
+    $response->writeHead(200, [
+        'Content-Type' => 'application/json',
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Authorization',
+        'Access-Control-Max-Age' => '86400'
+    ]);
+    
+    if ($request->getMethod() === 'OPTIONS') {
+        $response->end();
+        return;
+    }
+    
+    // Handle health check
     if ($request->getUri()->getPath() === '/health') {
-        $response->writeHead(200, ['Content-Type' => 'application/json']);
         $response->end(json_encode([
             'status' => 'healthy',
             'timestamp' => time(),
             'connections' => count($server->app->clients ?? [])
         ]));
+        return;
     }
+    
+    // Handle WebSocket upgrade requests
+    if ($request->getHeaderLine('Upgrade') === 'websocket') {
+        // Let the WebSocket server handle this
+        return;
+    }
+    
+    // Default response for other requests
+    $response->end(json_encode([
+        'message' => 'Edutorium WebSocket Server',
+        'status' => 'running',
+        'websocket_url' => 'wss://edutorium-api.pegioncloud.com'
+    ]));
 });
+
+logMessage('INFO', 'Battle WebSocket Server is running on port ' . WEBSOCKET_PORT . '. Press Ctrl+C to stop.');
 
 $server->run();

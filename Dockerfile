@@ -2,7 +2,7 @@
 FROM composer:2.6 AS composer-stage
 
 WORKDIR /app
-COPY composer.json composer.lock ./
+COPY composer.json ./
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
 FROM php:8.2-cli
@@ -49,7 +49,7 @@ set -e\n\
 \n\
 echo "Starting Edutorium WebSocket Server..."\n\
 echo "Environment: ${APP_ENV:-production}"\n\
-echo "Port: ${WEBSOCKET_PORT:-8080}"\n\
+echo "Port: ${WEBSOCKET_PORT:-3000}"\n\
 echo "Supabase URL: ${SUPABASE_URL}"\n\
 echo ""\n\
 \n\
@@ -60,11 +60,11 @@ exec php battle-server.php' > /usr/local/bin/start-websocket.sh
 RUN chmod +x /usr/local/bin/start-websocket.sh
 
 # Expose WebSocket port
-EXPOSE 8080
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Start WebSocket server
 CMD ["/usr/local/bin/start-websocket.sh"]

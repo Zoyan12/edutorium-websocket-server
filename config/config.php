@@ -25,7 +25,7 @@ define('SUPABASE_URL', $supabase_url);
 define('SUPABASE_ANON_KEY', $supabase_key);
 
 // WebSocket settings
-define('WEBSOCKET_PORT', getenv('WEBSOCKET_PORT') ?: 8080);
+define('WEBSOCKET_PORT', getenv('WEBSOCKET_PORT') ?: 3000);
 define('WEBSOCKET_HOST', '0.0.0.0');
 
 // Logging settings
