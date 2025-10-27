@@ -5,8 +5,8 @@
  * This server manages battle matchmaking and gameplay
  */
 
-// Load dependencies
-require __DIR__ . '/vendor/autoload.php';
+// Load dependencies from client directory
+require __DIR__ . '/../client/vendor/autoload.php';
 require __DIR__ . '/config/config.php';
 
 // Display startup diagnostics
