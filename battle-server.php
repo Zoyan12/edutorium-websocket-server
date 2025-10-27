@@ -707,10 +707,22 @@ class BattleServer implements MessageComponentInterface {
         
         if (isset($this->activeBattles[$battleId])) {
             $battle = $this->activeBattles[$battleId];
+
+            // Mark disconnecting player, keep battle for rejoin
+            if ($conn->battleData->userId === $battle['player1']) {
+                $battle['player1_connection'] = null;
+                $battle['player1_disconnected_at'] = time();
+            } else if ($conn->battleData->userId === $battle['player2']) {
+                $battle['player2_connection'] = null;
+                $battle['player2_disconnected_at'] = time();
+            }
+
+            // Pause battle to allow rejoin
+            $battle['status'] = 'paused';
+            $this->activeBattles[$battleId] = $battle;
             
             // Notify opponent
             $opponentId = ($conn->battleData->userId === $battle['player1']) ? $battle['player2'] : $battle['player1'];
-            
             if (isset($this->users[$opponentId])) {
                 $this->sendMessage($this->users[$opponentId], [
                     'action' => 'opponent_disconnected',
@@ -718,12 +730,7 @@ class BattleServer implements MessageComponentInterface {
                 ]);
             }
             
-            // Clean up battle
-            unset($this->activeBattles[$battleId]);
-            unset($this->battleState[$battleId]);
-            unset($this->matchConfirmations[$battleId]);
-            
-            logMessage('WARNING', "Battle {$battleId} ended due to disconnection");
+            logMessage('WARNING', "Battle {$battleId} paused due to disconnection; awaiting possible rejoin");
         }
     }
 
