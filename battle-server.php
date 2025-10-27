@@ -436,15 +436,49 @@ class BattleServer implements MessageComponentInterface {
         // Send current battle state
         if (isset($this->battleState[$matchId])) {
             $currentState = $this->battleState[$matchId];
-            $this->sendMessage($conn, [
-                'action' => 'battle_started',
-                'type' => 'battleStart',
-                'battle_id' => $matchId,
-                'current_round' => $currentState['currentRound'],
-                'total_rounds' => $currentState['totalRounds'],
-                'question' => $currentState['currentQuestion'],
-                'time_limit' => 30
-            ]);
+            
+            // Resume battle if both players are back
+            if ($battle['status'] === 'paused' && 
+                isset($battle['player1_connection']) && 
+                isset($battle['player2_connection'])) {
+                $battle['status'] = 'active';
+                $this->activeBattles[$matchId] = $battle;
+                logMessage('INFO', "Battle {$matchId} resumed - both players reconnected");
+            }
+            
+            // Send current question if battle is active
+            if ($battle['status'] === 'active' && isset($currentState['questions'])) {
+                $currentRound = $currentState['current_round'] ?? 1;
+                $questionIndex = $currentRound - 1;
+                
+                if (isset($currentState['questions'][$questionIndex])) {
+                    $question = $currentState['questions'][$questionIndex];
+                    $this->sendMessage($conn, [
+                        'action' => 'battle_started',
+                        'type' => 'battleStart',
+                        'battle_id' => $matchId,
+                        'current_round' => $currentRound,
+                        'total_rounds' => $currentState['total_rounds'],
+                        'question' => $question,
+                        'time_limit' => 30
+                    ]);
+                } else {
+                    // Battle might be finished, send end state
+                    $this->sendMessage($conn, [
+                        'action' => 'battle_ended',
+                        'final_scores' => [
+                            'player1' => $currentState['player1_score'] ?? 0,
+                            'player2' => $currentState['player2_score'] ?? 0
+                        ]
+                    ]);
+                }
+            } else {
+                // Battle is paused, send waiting message
+                $this->sendMessage($conn, [
+                    'action' => 'battle_paused',
+                    'message' => 'Waiting for opponent to reconnect...'
+                ]);
+            }
         }
     }
 
@@ -836,6 +870,29 @@ try {
             if ($client->battleData->lastPing < $currentTime - 30) {
                 logMessage('WARNING', "Client {$client->resourceId} timed out");
                 $client->close();
+            }
+        }
+        
+        // Clean up paused battles that have been inactive for too long (2 minutes)
+        $battlesToCleanup = [];
+        foreach ($battleServer->activeBattles as $battleId => $battle) {
+            if ($battle['status'] === 'paused') {
+                $pausedTime = max(
+                    $battle['player1_disconnected_at'] ?? 0,
+                    $battle['player2_disconnected_at'] ?? 0
+                );
+                
+                if ($pausedTime > 0 && $currentTime - $pausedTime > 120) { // 2 minutes
+                    $battlesToCleanup[] = $battleId;
+                }
+            }
+        }
+        
+        foreach ($battlesToCleanup as $battleId) {
+            logMessage('INFO', "Cleaning up paused battle {$battleId} after 2 minutes");
+            unset($battleServer->activeBattles[$battleId]);
+            if (isset($battleServer->battleState[$battleId])) {
+                unset($battleServer->battleState[$battleId]);
             }
         }
     });
