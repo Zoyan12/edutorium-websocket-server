@@ -267,10 +267,58 @@ class BattleServer implements MessageComponentInterface {
         
         logMessage('INFO', "User {$conn->battleData->username} confirmed battle {$battleId}");
         
+        // Notify the other player that this player is ready
+        $player1Conn = $this->users[$battle['player1']];
+        $player2Conn = $this->users[$battle['player2']];
+        
+        if ($userId === $battle['player1'] && !isset($this->matchConfirmations[$battleId][$battle['player2']])) {
+            // Player 1 is ready, notify player 2
+            $this->sendMessage($player2Conn, [
+                'type' => 'opponentReady',
+                'action' => 'opponent_ready'
+            ]);
+        } else if ($userId === $battle['player2'] && !isset($this->matchConfirmations[$battleId][$battle['player1']])) {
+            // Player 2 is ready, notify player 1
+            $this->sendMessage($player1Conn, [
+                'type' => 'opponentReady',
+                'action' => 'opponent_ready'
+            ]);
+        }
+        
         // Check if both players confirmed
         if (count($this->matchConfirmations[$battleId]) === 2) {
-            $this->startBattle($battleId);
+            logMessage('INFO', "Both players ready for battle {$battleId}, sending bothReady message");
+            
+            // Send bothReady message to both players
+            $this->sendMessage($player1Conn, [
+                'type' => 'bothReady',
+                'action' => 'both_ready',
+                'battle_id' => $battleId
+            ]);
+            
+            $this->sendMessage($player2Conn, [
+                'type' => 'bothReady',
+                'action' => 'both_ready',
+                'battle_id' => $battleId
+            ]);
+            
+            // Start battle after a 4-second delay (to allow for the countdown animation)
+            $this->scheduleStartBattle($battleId, 4);
         }
+    }
+    
+    private function scheduleStartBattle($battleId, $delay) {
+        logMessage('INFO', "Scheduling battle {$battleId} to start in {$delay} seconds");
+        
+        // Use a timer to start the battle after the countdown
+        // Note: This is a simplified approach. In production, you might want to use a proper timer/scheduler
+        $loop = \React\EventLoop\Loop::get();
+        $loop->addTimer($delay, function() use ($battleId) {
+            if (isset($this->activeBattles[$battleId])) {
+                logMessage('INFO', "Starting battle {$battleId} after countdown");
+                $this->startBattle($battleId);
+            }
+        });
     }
 
     private function handleSubmitAnswer($conn, $data) {
