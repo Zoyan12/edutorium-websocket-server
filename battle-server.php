@@ -89,6 +89,10 @@ class BattleServer implements MessageComponentInterface {
                 $this->handleReadyForNextRound($from);
                 break;
                 
+            case 'join_match':
+                $this->handleJoinMatch($from, $data);
+                break;
+                
             case 'ping':
                 $this->handlePing($from);
                 break;
@@ -370,6 +374,77 @@ class BattleServer implements MessageComponentInterface {
         // Check if both players are ready
         if (count($battleState['ready_players']) === 2) {
             $this->nextRound($battleId);
+        }
+    }
+
+    private function handleJoinMatch($conn, $data) {
+        if (!$conn->battleData->userId) {
+            logMessage('ERROR', 'Attempted join_match without login');
+            $this->sendError($conn, 'Not logged in');
+            return;
+        }
+        
+        $userId = $conn->battleData->userId;
+        $matchId = $data['matchId'] ?? null;
+        
+        logMessage('DEBUG', "handleJoinMatch called for user {$userId}, matchId: {$matchId}");
+        
+        if (!$matchId) {
+            logMessage('ERROR', 'No matchId provided');
+            $this->sendError($conn, 'Match ID is required');
+            return;
+        }
+        
+        if (!isset($this->activeBattles[$matchId])) {
+            logMessage('ERROR', "Battle {$matchId} not found in active battles");
+            $this->sendError($conn, 'Battle not found. Available battles: ' . json_encode(array_keys($this->activeBattles)));
+            return;
+        }
+        
+        $battle = $this->activeBattles[$matchId];
+        
+        // Verify the user is authorized to join this battle
+        if ($battle['player1'] !== $userId && $battle['player2'] !== $userId) {
+            logMessage('ERROR', "User {$userId} not authorized for battle {$matchId}");
+            $this->sendError($conn, 'You are not authorized to join this battle');
+            return;
+        }
+        
+        // Update user's battle data
+        $conn->battleData->battleId = $matchId;
+        $conn->battleData->inBattle = true;
+        $conn->battleData->state = 'in_battle';
+        
+        // Update connection reference
+        $isPlayer1 = ($battle['player1'] === $userId);
+        if ($isPlayer1) {
+            $battle['player1_connection'] = $conn;
+        } else {
+            $battle['player2_connection'] = $conn;
+        }
+        $this->activeBattles[$matchId] = $battle;
+        
+        logMessage('INFO', "User {$conn->battleData->username} joined battle {$matchId}");
+        
+        // Send join success message
+        $this->sendMessage($conn, [
+            'action' => 'join_success',
+            'type' => 'joinMatchSuccess',
+            'battleId' => $matchId
+        ]);
+        
+        // Send current battle state
+        if (isset($this->battleState[$matchId])) {
+            $currentState = $this->battleState[$matchId];
+            $this->sendMessage($conn, [
+                'action' => 'battle_started',
+                'type' => 'battleStart',
+                'battle_id' => $matchId,
+                'current_round' => $currentState['currentRound'],
+                'total_rounds' => $currentState['totalRounds'],
+                'question' => $currentState['currentQuestion'],
+                'time_limit' => 30
+            ]);
         }
     }
 
